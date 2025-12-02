@@ -120,8 +120,8 @@
       let mouseY = 0;
       let mouseDown = false;
       let cameraYaw = 0;
-      let cameraPitch = 0.5;
-      let cameraDistance = 8.0;
+      let cameraPitch = 0.1;
+      let cameraDistance = 12.0;
 
       const vertexShader = `@vertex
 fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32> {
@@ -132,8 +132,11 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f
       const uniformsStruct = `struct Object {
   position: vec3<f32>,
   objType: f32,
-  scale: f32,
   color: vec3<f32>,
+  scale: f32,
+  _padding1: f32,
+  _padding2: f32,
+  _padding3: f32,
 }
 
 struct Uniforms {
@@ -405,7 +408,7 @@ function updateObjectProperty(prop, index, value) {
     obj.position[index] = value;
   } else if (prop === 'scale') {
     obj.scale = value;
-    // Mettre à jour uniquement le texte de la valeur, pas tout le panneau
+
     const scaleValueEl = document.getElementById('scale-value');
     if (scaleValueEl) scaleValueEl.textContent = value.toFixed(2);
   } else if (prop === 'color') {
@@ -453,16 +456,16 @@ function updateObjectProperty(prop, index, value) {
         // Chaque objet = 8 floats = 32 bytes
         for (let i = 0; i < Math.min(scene.objects.length, 10); i++) {
           const obj = scene.objects[i];
-          const offset = 12 + i * 8;
+          const offset = 12 + i * 12;
           
           bufferData[offset + 0] = obj.position[0];
           bufferData[offset + 1] = obj.position[1];
           bufferData[offset + 2] = obj.position[2];
           bufferData[offset + 3] = obj.objType;
-          bufferData[offset + 4] = obj.scale;
-          bufferData[offset + 5] = obj.color[0];
-          bufferData[offset + 6] = obj.color[1];
-          bufferData[offset + 7] = obj.color[2];
+          bufferData[offset + 4] = obj.color[0];
+          bufferData[offset + 5] = obj.color[1];
+          bufferData[offset + 6] = obj.color[2];
+          bufferData[offset + 7] = obj.scale;
         }
         
         device.queue.writeBuffer(uniformBuffer, 0, bufferData);
@@ -521,8 +524,8 @@ function updateObjectProperty(prop, index, value) {
         keys[e.key] = true;
         if (e.key === "ArrowLeft") cameraYaw += 0.05;
         if (e.key === "ArrowRight") cameraYaw -= 0.05;
-        if (e.key === "ArrowUp") cameraPitch = Math.min(cameraPitch + 0.05, 1.5);
-        if (e.key === "ArrowDown") cameraPitch = Math.max(cameraPitch - 0.05, 0.05);
+        if (e.key === "ArrowUp") cameraPitch = Math.min(cameraPitch - 0.05, 1.5);
+        if (e.key === "ArrowDown") cameraPitch = Math.max(cameraPitch + 0.05, 0.05);
       });
       window.addEventListener("keyup", (e) => {
         keys[e.key] = false;
