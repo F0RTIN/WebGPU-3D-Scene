@@ -1,3 +1,6 @@
+   WORKING VERSION (random pos for new objects) (Ombre baveuse, lumière bizarre) (Déplacement cam à faire)
+
+
 <!doctype html>
 <html lang="en">
   <head>
@@ -88,6 +91,7 @@
           <div class="flex gap-2">
             <button id="add-sphere-btn" class="flex-1 px-2 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600">+ Sphere</button>
             <button id="add-cube-btn" class="flex-1 px-2 py-1 text-xs rounded bg-purple-700 hover:bg-purple-600">+ Cube</button>
+            <button id="add-torus-btn" class="flex-1 px-2 py-1 text-xs rounded bg-green-700 hover:bg-green-600">+ Torus</button>
           </div>
         </div>
 
@@ -176,6 +180,12 @@ fn sdBox(p: vec3<f32>, b: vec3<f32>) -> f32 {
   return length(max(q, vec3<f32>(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
 }
 
+fn sdTorus(p: vec3<f32>, r1: f32, r2: f32) -> f32 {
+  let q = vec2<f32>(length(p.xz) - r1, p.y);
+  return length(q) - r2;
+}
+
+
 fn sdPlane(p: vec3<f32>, n: vec4<f32>) -> f32 {
   return dot(p, n.xyz) + n.w;
 }
@@ -202,9 +212,12 @@ fn sceneSDF(p: vec3<f32>) -> vec2<f32> {
     
     if (obj.objType < 0.5) {
       dist = sdSphere(localP, obj.scale);
-    } else {
+    } else if (obj.objType < 1.5) {
       dist = sdBox(localP, vec3<f32>(obj.scale));
+    } else {
+      dist = sdTorus(localP, obj.scale, obj.scale * 0.3);
     }
+
     
     if (dist < d) {
       d = dist;
@@ -246,15 +259,17 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
   let up = cross(right, forward);
   
   let rd = normalize(forward + uv.x * right + uv.y * up);
-  
   var t = 0.0;
+  var epsilon = 0.001 * t;
   var hitObjIndex = -1.0;
   for (var i = 0; i < 100; i++) {
     let p = camPos + rd * t;
     let result = sceneSDF(p);
     let d = result.x;
     
-    if (d < 0.001) {
+    let eps = max(0.001, 0.001 * t);
+    
+    if (d < eps) {
       hitObjIndex = result.y;
       break;
     }
@@ -265,7 +280,7 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
     }
   }
   
-  var col = vec3<f32>(0.1, 0.1, 0.15); // background color
+  var col = vec3<f32>(0.6, 0.6, 0.0); // background color
   
   // intersection point
   let p = camPos + rd * t;
@@ -303,7 +318,7 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
 
   } else {
     // keep background color (no hit)
-    col = vec3<f32>(0.05, 0.06, 0.08);
+    col = vec3<f32>(0.6, 0.7, 0.9);
   }
   
   return vec4<f32>(col, 1.0);
@@ -390,7 +405,7 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
             Math.random() * 0.5 + 0.5,
             Math.random() * 0.5 + 0.5
           ],
-          objType: type === 'sphere' ? 0 : 1
+          objType: type === 'sphere' ? 0 : type === 'cube' ? 1 : 2
         };
         
         scene.objects.push(obj);
@@ -578,6 +593,7 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
 
       document.getElementById('add-sphere-btn').onclick = () => createObject('sphere');
       document.getElementById('add-cube-btn').onclick = () => createObject('cube');
+      document.getElementById('add-torus-btn').onclick = () => createObject('torus');
 
       canvas.addEventListener("mousemove", (e) => {
         const rect = canvas.getBoundingClientRect();
