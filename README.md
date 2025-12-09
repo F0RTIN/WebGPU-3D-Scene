@@ -76,6 +76,7 @@ WebGPU_ShaderToy/
 ├── index.html           # Main file with HTML, CSS, and JS
 ├── README.md
 └── assets/              # Optional assets (not included in this code)
+```
 ### Usage
 
 1. Lancer l'application dans votre navigateur.
