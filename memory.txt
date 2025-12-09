@@ -1,0 +1,616 @@
+   WORKING VERSION (random pos for new objects) (Ombre baveuse, lumière bizarre) (Déplacement cam à faire)
+
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebGPU Shadertoy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/mode/simple.min.js"></script>
+    <style>
+      .cm-s-gruvbox-dark-hard.CodeMirror {
+        background-color: #1d2021;
+        color: #ebdbb2;
+        height: 100%;
+        overflow-y: auto;
+      }
+      .cm-s-gruvbox-dark-hard .CodeMirror-gutters {
+        background-color: #1d2021;
+        border-right: 1px solid #3c3836;
+      }
+      .cm-s-gruvbox-dark-hard .CodeMirror-linenumber {
+        color: #7c6f64;
+      }
+      .cm-s-gruvbox-dark-hard .CodeMirror-cursor {
+        border-left: 1px solid #ebdbb2;
+      }
+      .cm-s-gruvbox-dark-hard .CodeMirror-activeline-background {
+        background-color: #3c3836;
+      }
+      .cm-s-gruvbox-dark-hard .CodeMirror-selected {
+        background-color: #504945;
+      }
+      .cm-s-gruvbox-dark-hard span.cm-comment {
+        color: #928374;
+      }
+      .cm-s-gruvbox-dark-hard span.cm-keyword {
+        color: #fb4934;
+      }
+      .cm-s-gruvbox-dark-hard span.cm-operator {
+        color: #ebdbb2;
+      }
+      .cm-s-gruvbox-dark-hard span.cm-string {
+        color: #b8bb26;
+      }
+      .cm-s-gruvbox-dark-hard span.cm-number {
+        color: #d3869b;
+      }
+      #code-editor-container {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      #code-editor-container .CodeMirror {
+        flex: 1;
+        min-height: 0;
+      }
+      .CodeMirror-scroll {
+        height: 100%;
+        overflow-y: auto !important;
+        overflow-x: auto !important;
+      }
+      .num-input {
+        width: 60px; padding: 4px; background: #3c3836; color: #ebdbb2;
+        border: 1px solid #665c54; border-radius: 4px;
+      }
+      .control-label { font-size: 12px; color: #fe8019; }
+      .object-item {
+        padding: 8px; margin-bottom: 8px; background: #3c3836;
+        border-left: 3px solid #fe8019; cursor: pointer; border-radius: 4px;
+      }
+      .object-item:hover { background: #504945; }
+      .object-item.selected { background: #504945; border-left-color: #b8bb26; }
+      .scroll-container { overflow-y: auto; max-height: 200px; }
+    </style>
+  </head>
+  <body class="font-mono bg-gray-900 text-white overflow-hidden">
+    <div class="flex w-screen h-screen gap-0">
+      <div class="flex-1 bg-black relative">
+        <canvas id="canvas" class="block w-full h-full"></canvas>
+        <div id="error-message" class="absolute bottom-2.5 left-2.5 right-2.5 text-red-500 text-xs bg-black/80 p-1.5 rounded hidden max-h-24 overflow-y-auto z-10"></div>
+        <div class="absolute top-2.5 left-2.5 text-xs" style="color: #fe8019"><span id="fps">0</span> FPS</div>
+      </div>
+      
+      <div class="w-80 bg-gray-800 flex flex-col border-l border-gray-700 overflow-hidden" style="background: #1d2021">
+        <div class="p-3 border-b" style="background: #1d2021; color: #ebdbb2; border-color: #3c3836">
+          <h2 class="font-bold mb-2 text-sm">Scene Objects</h2>
+          <div class="flex gap-2">
+            <button id="add-sphere-btn" class="flex-1 px-2 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600">+ Sphere</button>
+            <button id="add-cube-btn" class="flex-1 px-2 py-1 text-xs rounded bg-purple-700 hover:bg-purple-600">+ Cube</button>
+          </div>
+        </div>
+
+        <div class="flex-1 flex flex-col overflow-hidden">
+          <div class="p-3 border-b flex-shrink-0" style="border-color: #3c3836">
+            <h3 class="font-bold text-xs mb-2" style="color: #fe8019">Objects</h3>
+            <div id="objects-list" class="scroll-container"></div>
+          </div>
+
+          <div class="flex-1 overflow-y-auto p-3" id="properties-panel" style="display: none; border-top: 1px solid #3c3836">
+            <h3 class="font-bold text-xs mb-3" style="color: #fe8019">Properties</h3>
+            <div id="properties-content" class="space-y-3"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById('canvas');
+      const errorMsg = document.getElementById('error-message');
+      let device, context, pipeline, uniformBuffer, bindGroup;
+      let startTime = performance.now();
+      let lastFrameTime = startTime;
+      let frameCount = 0;
+      let lastFpsUpdate = startTime;
+
+      let scene = { objects: [], selectedIndex: -1 };
+      let objectIdCounter = 0;
+      let mouseX = 0;
+      let mouseY = 0;
+      let mouseDown = false;
+      let cameraYaw = 0;
+      let cameraPitch = 0.1;
+      let cameraDistance = 12.0;
+
+      const vertexShader = `@vertex
+fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32> {
+  var pos = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>(3.0, -1.0),
+    vec2<f32>(-1.0, 3.0)
+  );
+  return vec4<f32>(pos[vertexIndex], 0.0, 1.0);
+}`;
+
+      const uniformsStruct = `struct Object {
+  position: vec3<f32>,
+  objType: f32,
+  color: vec3<f32>,
+  scale: f32,
+  _padding1: f32,
+  _padding2: f32,
+  _padding3: f32,
+}
+
+struct Uniforms {
+  resolution: vec2<f32>,
+  time: f32,
+  deltaTime: f32,
+  mouse: vec2<f32>,
+  mouseDown: f32,
+  _padding: f32,
+  frame: u32,
+  numObjects: u32,
+  _padding2: f32,
+  _padding3: f32,
+  objects: array<Object, 10>,
+}
+
+@group(0) @binding(0) var<uniform> u: Uniforms;`;
+
+      // --- fragment shader with procedural checkerboard on the ground plane ---
+      const fragmentShader = `${uniformsStruct}
+
+// constants for identifying the plane in sceneSDF and for materials
+const MAT_PLANE: f32 = -2.0;
+const MAT_SPHERE: f32 = 0.0;
+const MAT_BOX: f32 = 1.0;
+
+fn sdSphere(p: vec3<f32>, r: f32) -> f32 {
+  return length(p) - r;
+}
+
+fn sdBox(p: vec3<f32>, b: vec3<f32>) -> f32 {
+  let q = abs(p) - b;
+  return length(max(q, vec3<f32>(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
+fn sdPlane(p: vec3<f32>, n: vec4<f32>) -> f32 {
+  return dot(p, n.xyz) + n.w;
+}
+
+fn opUnion(d1: f32, d2: f32) -> f32 {
+  return min(d1, d2);
+}
+
+fn sceneSDF(p: vec3<f32>) -> vec2<f32> {
+  var d = 10000.0;
+  var objIndex = -1.0;
+  
+  // Ground plane (y = 16)
+  let groundDist = sdPlane(p, vec4<f32>(0.0, 1.0, 0.0, 3.0));
+  if (groundDist < d) {
+    d = groundDist;
+    objIndex = MAT_PLANE; // -2.0 per constant above
+  }
+  
+  for (var i = 0u; i < u.numObjects; i++) {
+    let obj = u.objects[i];
+    let localP = p - obj.position;
+    var dist: f32;
+    
+    if (obj.objType < 0.5) {
+      dist = sdSphere(localP, obj.scale);
+    } else {
+      dist = sdBox(localP, vec3<f32>(obj.scale));
+    }
+    
+    if (dist < d) {
+      d = dist;
+      objIndex = f32(i);
+    }
+  }
+  
+  return vec2<f32>(d, objIndex);
+}
+
+fn calcNormal(p: vec3<f32>) -> vec3<f32> {
+  let h = 0.0001;
+  let k = vec2<f32>(1.0, -1.0);
+  return normalize(
+    k.xyy * sceneSDF(p + k.xyy * h).x +
+    k.yyx * sceneSDF(p + k.yyx * h).x +
+    k.yxy * sceneSDF(p + k.yxy * h).x +
+    k.xxx * sceneSDF(p + k.xxx * h).x
+  );
+}
+
+@fragment
+fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
+  let uv = (fragCoord.xy - 0.5 * u.resolution.xy) / u.resolution.y;
+  
+  let camYaw = (u.mouse.x / u.resolution.x) * 6.28318530718;
+  let camPitch = (u.mouse.y / u.resolution.y) * 1.5;
+  
+  let camDist = 12.0;
+  let camPos = vec3<f32>(
+    cos(camYaw) * cos(camPitch) * camDist,
+    sin(camPitch) * camDist,
+    sin(camYaw) * cos(camPitch) * camDist
+  );
+  
+  let lookAt = vec3<f32>(0.0, 0.0, 0.0);
+  let forward = normalize(lookAt - camPos);
+  let right = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), forward));
+  let up = cross(right, forward);
+  
+  let rd = normalize(forward + uv.x * right + uv.y * up);
+  
+  var t = 0.0;
+  var hitObjIndex = -1.0;
+  for (var i = 0; i < 100; i++) {
+    let p = camPos + rd * t;
+    let result = sceneSDF(p);
+    let d = result.x;
+    
+    if (d < 0.001) {
+      hitObjIndex = result.y;
+      break;
+    }
+    
+    t += d;
+    if (t > 100.0) {
+      break;
+    }
+  }
+  
+  var col = vec3<f32>(0.1, 0.1, 0.15); // background color
+  
+  // intersection point
+  let p = camPos + rd * t;
+  
+  // If we hit an object (non-negative index) -> shade object.
+  if (hitObjIndex >= 0.0) {
+    let normal = calcNormal(p);
+    let lightDir = normalize(vec3<f32>(1.0, 1.0, 1.0));
+    let diff = max(dot(normal, lightDir), 0.0);
+    
+    let objIndex = i32(hitObjIndex);
+    var objColor = u.objects[objIndex].color;
+    let ambient = 0.2;
+    col = objColor * (ambient + diff * 0.8);
+    
+  // Else if we hit the plane -> draw checkerboard only on ground
+  } else if (hitObjIndex == MAT_PLANE) {
+    // checkerboard: use integer parity of floored X and Z
+    let cx = i32(floor(p.x));
+    let cz = i32(floor(p.z));
+    let parity = (cx + cz) % 2;
+    var baseColor = vec3<f32>(0.9, 0.9, 0.9);
+    var altColor = vec3<f32>(0.2, 0.2, 0.2);
+    var checkerColor = select(altColor, baseColor, parity == 0);
+
+    // simple lambert lighting for plane
+    let normal = vec3<f32>(0.0, 1.0, 0.0);
+    let lightDir = normalize(vec3<f32>(1.0, 1.0, 1.0));
+    let diff = max(dot(normal, lightDir), 0.0);
+    let ambient = 0.25;
+    col = checkerColor * (ambient + diff * 0.8);
+
+    // small shadowing / contact darkening near objects (optional)
+    // could be extended with soft shadow SDF later
+
+  } else {
+    // keep background color (no hit)
+    col = vec3<f32>(0.05, 0.06, 0.08);
+  }
+  
+  return vec4<f32>(col, 1.0);
+}`;
+
+      async function initWebGPU() {
+        if (!navigator.gpu) {
+          errorMsg.textContent = "WebGPU not supported";
+          errorMsg.classList.remove("hidden");
+          return false;
+        }
+
+        const adapter = await navigator.gpu.requestAdapter();
+        device = await adapter.requestDevice();
+        context = canvas.getContext("webgpu");
+        const format = navigator.gpu.getPreferredCanvasFormat();
+        context.configure({ device, format });
+
+        try {
+          const shaderModule = device.createShaderModule({
+            code: vertexShader + "\n" + fragmentShader,
+          });
+
+          uniformBuffer = device.createBuffer({
+            size: 2048,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+          });
+
+          const bindGroupLayout = device.createBindGroupLayout({
+            entries: [{
+              binding: 0,
+              visibility: GPUShaderStage.FRAGMENT,
+              buffer: { type: "uniform" },
+            }],
+          });
+
+          bindGroup = device.createBindGroup({
+            layout: bindGroupLayout,
+            entries: [{
+              binding: 0,
+              resource: { buffer: uniformBuffer },
+            }],
+          });
+
+          pipeline = device.createRenderPipeline({
+            layout: device.createPipelineLayout({
+              bindGroupLayouts: [bindGroupLayout],
+            }),
+            vertex: {
+              module: shaderModule,
+              entryPoint: "vs_main",
+            },
+            fragment: {
+              module: shaderModule,
+              entryPoint: "fs_main",
+              targets: [{ format }],
+            },
+            primitive: {
+              topology: "triangle-list",
+            },
+          });
+
+          errorMsg.classList.add("hidden");
+          return true;
+        } catch (err) {
+          errorMsg.textContent = err.message;
+          errorMsg.classList.remove("hidden");
+          return false;
+        }
+      }
+
+      function createObject(type) {
+        const obj = {
+          id: objectIdCounter++,
+          type: type,
+          position: [
+            (Math.random() - 0.5) * 6,
+            (Math.random() - 0.5) * 6,
+            (Math.random() - 0.5) * 6
+          ],
+          scale: 1.0,
+          color: [
+            Math.random() * 0.5 + 0.5,
+            Math.random() * 0.5 + 0.5,
+            Math.random() * 0.5 + 0.5
+          ],
+          objType: type === 'sphere' ? 0 : 1
+        };
+        
+        scene.objects.push(obj);
+        updateObjectsList();
+        selectObject(scene.objects.length - 1);
+      }
+
+      function updateObjectsList() {
+        const list = document.getElementById('objects-list');
+        list.innerHTML = scene.objects.map((obj, i) => `
+          <div class="object-item ${i === scene.selectedIndex ? 'selected' : ''}" 
+               onclick="selectObject(${i})">
+            <div class="flex justify-between items-center">
+              <span>${obj.type === 'sphere' ? '🔵' : '🟪'} ${obj.type} ${obj.id}</span>
+              <button onclick="event.stopPropagation(); deleteObject(${i})" 
+                      class="text-red-500 hover:text-red-400 text-xs">×</button>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      function selectObject(index) {
+        scene.selectedIndex = index;
+        updateObjectsList();
+        updatePropertiesPanel();
+      }
+
+      function deleteObject(index) {
+        scene.objects.splice(index, 1);
+        if (scene.selectedIndex >= scene.objects.length) {
+          scene.selectedIndex = scene.objects.length - 1;
+        }
+        updateObjectsList();
+        if (scene.selectedIndex >= 0) {
+          updatePropertiesPanel();
+        } else {
+          document.getElementById('properties-panel').style.display = 'none';
+        }
+      }
+
+      function updatePropertiesPanel() {
+        const panel = document.getElementById('properties-panel');
+        const content = document.getElementById('properties-content');
+        
+        if (scene.selectedIndex < 0) {
+          panel.style.display = 'none';
+          return;
+        }
+        
+        panel.style.display = 'block';
+        const obj = scene.objects[scene.selectedIndex];
+        
+        const colorHex = '#' + obj.color.map(c => 
+          Math.round(c * 255).toString(16).padStart(2, '0')
+        ).join('');
+        
+        content.innerHTML = `
+          <div>
+            <div class="control-label mb-1">Position</div>
+            <div class="flex gap-1">
+              <input type="number" class="num-input" value="${obj.position[0].toFixed(2)}" 
+                     step="0.1" oninput="updateObjectProperty('position', 0, parseFloat(this.value))">
+              <input type="number" class="num-input" value="${obj.position[1].toFixed(2)}" 
+                     step="0.1" oninput="updateObjectProperty('position', 1, parseFloat(this.value))">
+              <input type="number" class="num-input" value="${obj.position[2].toFixed(2)}" 
+                     step="0.1" oninput="updateObjectProperty('position', 2, parseFloat(this.value))">
+            </div>
+          </div>
+          <div>
+            <div class="control-label mb-1">Scale: <span id="scale-value">${obj.scale.toFixed(2)}</span></div>
+            <input type="range" min="0.1" max="3" step="0.01" value="${obj.scale}" 
+                   class="w-full" oninput="updateObjectProperty('scale', null, parseFloat(this.value))">
+          </div>
+          <div>
+            <div class="control-label mb-1">Color</div>
+            <input type="color" value="${colorHex}" class="w-full h-8 rounded cursor-pointer"
+                   oninput="updateObjectProperty('color', null, this.value)">
+          </div>
+        `;
+      }
+
+      function updateObjectProperty(prop, index, value) {
+        if (scene.selectedIndex < 0) return;
+        const obj = scene.objects[scene.selectedIndex];
+        
+        if (prop === 'position') {
+          obj.position[index] = value;
+        } else if (prop === 'scale') {
+          obj.scale = value;
+          const scaleValueEl = document.getElementById('scale-value');
+          if (scaleValueEl) scaleValueEl.textContent = value.toFixed(2);
+        } else if (prop === 'color') {
+          const hex = value;
+          obj.color = [
+            parseInt(hex.substr(1, 2), 16) / 255,
+            parseInt(hex.substr(3, 2), 16) / 255,
+            parseInt(hex.substr(5, 2), 16) / 255
+          ];
+        }
+      }
+
+      function render() {
+        if (!pipeline) return;
+        
+        const currentTime = performance.now();
+        const deltaTime = (currentTime - lastFrameTime) / 1000;
+        const elapsedTime = (currentTime - startTime) / 1000;
+        
+        const normalizedMouseX = (cameraYaw % (Math.PI * 2)) / (Math.PI * 2) * canvas.width;
+        const normalizedMouseY = cameraPitch / 1.5 * canvas.height;
+        
+        const bufferData = new Float32Array(512);
+        
+        bufferData[0] = canvas.width;
+        bufferData[1] = canvas.height;
+        bufferData[2] = elapsedTime;
+        bufferData[3] = deltaTime;
+        bufferData[4] = normalizedMouseX;
+        bufferData[5] = normalizedMouseY;
+        bufferData[6] = mouseDown ? 1 : 0;
+        bufferData[7] = 0;
+        
+        const intView = new Uint32Array(bufferData.buffer);
+        intView[8] = frameCount;
+        intView[9] = scene.objects.length;
+        
+        bufferData[10] = 0;
+        bufferData[11] = 0;
+        
+        for (let i = 0; i < Math.min(scene.objects.length, 10); i++) {
+          const obj = scene.objects[i];
+          const offset = 12 + i * 12;
+          
+          bufferData[offset + 0] = obj.position[0];
+          bufferData[offset + 1] = obj.position[1];
+          bufferData[offset + 2] = obj.position[2];
+          bufferData[offset + 3] = obj.objType;
+          bufferData[offset + 4] = obj.color[0];
+          bufferData[offset + 5] = obj.color[1];
+          bufferData[offset + 6] = obj.color[2];
+          bufferData[offset + 7] = obj.scale;
+          bufferData[offset + 8] = 0;
+          bufferData[offset + 9] = 0;
+          bufferData[offset + 10] = 0;
+          bufferData[offset + 11] = 0;
+        }
+        
+        device.queue.writeBuffer(uniformBuffer, 0, bufferData);
+
+        const encoder = device.createCommandEncoder();
+        const pass = encoder.beginRenderPass({
+          colorAttachments: [{
+            view: context.getCurrentTexture().createView(),
+            loadOp: "clear",
+            clearValue: { r: 0.1, g: 0.1, b: 0.1, a: 1 },
+            storeOp: "store",
+          }],
+        });
+        
+        pass.setPipeline(pipeline);
+        pass.setBindGroup(0, bindGroup);
+        pass.draw(3);
+        pass.end();
+        device.queue.submit([encoder.finish()]);
+
+        lastFrameTime = currentTime;
+        if (++frameCount && currentTime - lastFpsUpdate > 100) {
+          const fps = Math.round(frameCount / ((currentTime - lastFpsUpdate) / 1_000));
+          document.getElementById("fps").textContent = fps;
+          frameCount = 0;
+          lastFpsUpdate = currentTime;
+        }
+
+        requestAnimationFrame(render);
+      }
+
+      function resizeCanvas() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        const dpr = devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = rect.width + "px";
+        canvas.style.height = rect.height + "px";
+      }
+
+      document.getElementById('add-sphere-btn').onclick = () => createObject('sphere');
+      document.getElementById('add-cube-btn').onclick = () => createObject('cube');
+
+      canvas.addEventListener("mousemove", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = devicePixelRatio || 1;
+        mouseX = (e.clientX - rect.left) * dpr;
+        mouseY = (e.clientY - rect.top) * dpr;
+      });
+      canvas.addEventListener("mousedown", () => (mouseDown = true));
+      canvas.addEventListener("mouseup", () => (mouseDown = false));
+      canvas.addEventListener("mouseleave", () => (mouseDown = false));
+
+      const keys = {};
+      window.addEventListener("keydown", (e) => {
+        keys[e.key] = true;
+        if (e.key === "ArrowLeft") cameraYaw += 0.05;
+        if (e.key === "ArrowRight") cameraYaw -= 0.05;
+        if (e.key === "ArrowUp") cameraPitch = Math.min(cameraPitch - 0.05, 1.5);
+        if (e.key === "ArrowDown") cameraPitch = Math.max(cameraPitch + 0.05, 0.05);
+      });
+      window.addEventListener("keyup", (e) => {
+        keys[e.key] = false;
+      });
+
+      window.addEventListener("resize", resizeCanvas);
+
+      const main = async () => {
+        resizeCanvas();
+        if (await initWebGPU()) render();
+      };
+      main();
+    </script>
+  </body>
+</html>
