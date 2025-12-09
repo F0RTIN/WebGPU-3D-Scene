@@ -4,15 +4,15 @@
 
 ---
 
-## 🚀 Live Demo
+## Live Demo
 
-[Access the Live Application](#)
+[Access the Live Application](https://f0rtin.github.io/WebGPU-3D-Scene/)
 
 Create and manipulate **3D objects** in real-time directly in your browser using **WebGPU** and an **SDF (Signed Distance Field)** based rendering engine.
 
 ---
 
-## 💡 Overview
+## Overview
 
 This project is an **interactive 3D rendering application** running in the browser, leveraging **WebGPU** for hardware acceleration and **Tailwind CSS** for a responsive user interface. Users can dynamically add and manipulate spheres, cubes, and tori in a 3D scene, which is procedurally rendered using **SDFs** and simple lighting.
 
@@ -20,7 +20,7 @@ Objects can be selected and their properties (**position**, **scale**, **color**
 
 ---
 
-## ✨ Key Features
+## Key Features
 
 * **Real-time** interactive 3D rendering with **WebGPU**.
 * **Dynamic object addition**: Spheres, Cubes, Tori.
@@ -33,7 +33,7 @@ Objects can be selected and their properties (**position**, **scale**, **color**
 
 ---
 
-## 🖥️ Shader Implementation
+## Shader Implementation
 
 The core rendering logic is handled by the shaders.
 
@@ -51,7 +51,7 @@ The core rendering logic is handled by the shaders.
 
 ---
 
-## 🛠️ Getting Started
+## Getting Started
 
 ### Requirements
 
@@ -77,51 +77,47 @@ WebGPU_ShaderToy/
 ├── README.md
 └── assets/              # Optional assets (not included in this code)
 ```
-### Usage
+## Usage
 
-1. Lancer l'application dans votre navigateur.
-2. Ajouter des objets à la scène à l'aide des boutons : `+ Sphère`, `+ Cube`, `+ Tore`.
-3. **Cliquer** sur un objet pour le sélectionner.
-4. Modifier ses propriétés dans le panneau latéral : **Position X/Y/Z**, **Échelle**, **Couleur**.
-5. Déplacer la caméra avec la **souris** ou les touches fléchées.
-6. Supprimer un objet à l'aide du bouton `×`.
-
----
-
-## ⚙️ Pile Technique (Technical Stack)
-
-| Composant | Rôle |
-| :--- | :--- |
-| **WebGPU** | Accélération matérielle pour le rendu GPU. |
-| **HTML5 Canvas** | Surface de rendu. |
-| **Tailwind CSS** | Framework d'interface utilisateur responsive. |
-| **CodeMirror** | Éditeur de code intégré (prévu pour extensions). |
-| **JavaScript (ES6)** | Logique de la scène, gestion des objets et des shaders. |
+- Launch the application in your browser.
+- Add objects to the scene using the buttons: `+ Sphere`, `+ Cube`, `+ Torus`.
+- Click on an object to select it.
+- Modify its properties in the sidebar panel: Position X/Y/Z, Scale, Color.
+- Move the camera with arrow keys.
+- Delete an object using the `×` button.
 
 ---
 
-## 📈 Métriques de Performance (Performance Metrics)
+## Technical Stack
 
-* Rendu en temps réel avec **affichage des FPS**.
-* Limite de **10 objets** pour maintenir des performances fluides.
-* Compatible avec les écrans haute résolution (prise en charge du **DPR**).
-
----
-
-## ⚠️ Dépannage (Troubleshooting)
-
-* **WebGPU non supporté** : Un message d'erreur sera affiché. Veuillez utiliser un navigateur compatible.
-* **FPS bas** : Vérifiez le nombre d'objets dans la scène et la résolution du canvas.
-* **Interactions UI** : Les propriétés ne se mettront à jour que si un objet est **activement sélectionné**.
+| Component      | Role                                              |
+|----------------|--------------------------------------------------|
+| WebGPU         | Hardware acceleration for GPU rendering         |
+| HTML5 Canvas   | Rendering surface                                |
+| Tailwind CSS   | Responsive UI framework                          |
+| CodeMirror     | Integrated code editor (planned for extensions) |
+| JavaScript (ES6) | Scene logic, object management, and shader handling |
 
 ---
 
-## 📝 Licence (License)
+## Performance Metrics
 
-**Licence MIT** – Voir le fichier LICENSE pour plus de détails.
+- Real-time rendering with displayed FPS
+- Limit of 10 objects to maintain smooth performance
+- Compatible with high-resolution displays (DPR support)
 
 ---
 
-## 👤 À Propos (About)
+## ⚠️ Troubleshooting
 
-Développé pour démontrer un **moteur de rendu 3D interactif** basé sur les **SDF** dans le navigateur, utilisant **WebGPU** pour l'accélération matérielle et une interface moderne construite avec **Tailwind CSS**.
+- **WebGPU Not Supported:** An error message will be displayed. Please use a compatible browser.
+- **Low FPS:** Check the number of objects in the scene and the canvas resolution.
+- **UI Interactions:** Properties will only update if an object is actively selected.
+
+---
+
+## License
+
+MIT License – See the LICENSE file for more details.
+
+---
